@@ -8,11 +8,34 @@ import SensorDataPanel from '@/components/SensorDataPanel';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import ApiKeyModal from '@/components/ui/ApiKeyModal';
+import { registerBackgroundSensorTask } from '@/hooks/useBackgroundFetch';
 import { useSensorBuffer } from '@/hooks/useSensorBuffer';
 import { useAvailableSensors, useSensorData } from '@/hooks/useSensors';
 import { postSensorBatch } from '@/utils/api';
 import { clearFailedQueue, loadFailedQueue, saveFailedBatch } from '@/utils/failedQueue';
 import * as SecureStore from 'expo-secure-store';
+
+async function backgroundSend(flush: () => any) {
+  const batched = flush();
+  let failed: any[] = [];
+  if (batched.length > 0) {
+    const results = await postSensorBatch(batched);
+    failed = results.filter(r => !r.success).map(r => r.item);
+  }
+  const prevFailed = await loadFailedQueue();
+  if (prevFailed.length > 0) {
+    const retryResults = await postSensorBatch(prevFailed);
+    const stillFailed = retryResults.filter(r => !r.success).map(r => r.item);
+    if (stillFailed.length === 0) {
+      await clearFailedQueue();
+    } else {
+      await saveFailedBatch(stillFailed);
+    }
+  }
+  if (failed.length > 0) {
+    await saveFailedBatch(failed);
+  }
+}
 
 export default function HomeScreen() {
   const available = useAvailableSensors();
@@ -64,6 +87,11 @@ export default function HomeScreen() {
       if (!key) setApiKeyModal(true);
     })();
   }, []);
+
+  // 백그라운드 태스크 등록 (최초 1회)
+  useEffect(() => {
+    registerBackgroundSensorTask(() => backgroundSend(flush));
+  }, [flush]);
 
   return (
     <>
