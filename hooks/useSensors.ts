@@ -9,7 +9,7 @@ export interface SensorData {
   gyroscope?: { x: number; y: number; z: number };
   magnetometer?: { x: number; y: number; z: number };
   barometer?: { pressure: number };
-  location?: { latitude: number; longitude: number; accuracy: number };
+  location?: { latitude: number; longitude: number; accuracy: number | null };
 }
 
 export function useAvailableSensors() {
@@ -40,25 +40,25 @@ export function useSensorData(enabledSensors: SensorType[], interval: number = 5
 
     if (enabledSensors.includes('accelerometer')) {
       listeners.push(
-        Accelerometer.addListener((d) => setData((prev) => ({ ...prev, accelerometer: d })))
+        Accelerometer.addListener((d: { x: number; y: number; z: number }) => setData((prev) => ({ ...prev, accelerometer: d })))
       );
       Accelerometer.setUpdateInterval(interval);
     }
     if (enabledSensors.includes('gyroscope')) {
       listeners.push(
-        Gyroscope.addListener((d) => setData((prev) => ({ ...prev, gyroscope: d })))
+        Gyroscope.addListener((d: { x: number; y: number; z: number }) => setData((prev) => ({ ...prev, gyroscope: d })))
       );
       Gyroscope.setUpdateInterval(interval);
     }
     if (enabledSensors.includes('magnetometer')) {
       listeners.push(
-        Magnetometer.addListener((d) => setData((prev) => ({ ...prev, magnetometer: d })))
+        Magnetometer.addListener((d: { x: number; y: number; z: number }) => setData((prev) => ({ ...prev, magnetometer: d })))
       );
       Magnetometer.setUpdateInterval(interval);
     }
     if (enabledSensors.includes('barometer')) {
       listeners.push(
-        Barometer.addListener((d) => setData((prev) => ({ ...prev, barometer: d })))
+        Barometer.addListener((d: { pressure: number }) => setData((prev) => ({ ...prev, barometer: d })))
       );
       Barometer.setUpdateInterval(interval);
     }
@@ -66,7 +66,14 @@ export function useSensorData(enabledSensors: SensorType[], interval: number = 5
       (async () => {
         locationSub = await Location.watchPositionAsync(
           { accuracy: Location.Accuracy.High, timeInterval: interval, distanceInterval: 0 },
-          (loc) => setData((prev) => ({ ...prev, location: loc.coords }))
+          (loc: Location.LocationObject) => setData((prev) => ({
+            ...prev,
+            location: {
+              latitude: loc.coords.latitude,
+              longitude: loc.coords.longitude,
+              accuracy: loc.coords.accuracy ?? null,
+            },
+          }))
         );
       })();
     }
