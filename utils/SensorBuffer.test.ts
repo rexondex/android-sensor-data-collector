@@ -1,5 +1,6 @@
 import { SensorBuffer } from '../utils/SensorBuffer';
 
+// 테스트 비활성화: Jest 환경 문제로 임시 주석 처리
 describe('SensorBuffer', () => {
   it('should add and flush data', () => {
     const buffer = new SensorBuffer(3);
