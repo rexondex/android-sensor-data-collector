@@ -1,25 +1,25 @@
 import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
-import { z } from 'zod';
+import { ApiResponseSchema } from './apiSchema';
 
 const API_URL = 'https://data-anchor-api-173411279831.asia-northeast3.run.app/records';
 
 // 응답 스키마 정의 (Zod)
-export const ApiResponseSchema = z.object({
-  id: z.string(),
-  key: z.string(),
-  version: z.number(),
-  data: z.object({
-    url: z.string().optional(),
-    name: z.string().optional(),
-    value: z.string().optional(),
-    where: z.string().optional(),
-  }),
-  status: z.string(),
-  createdAt: z.string(),
-  prevHash: z.string().nullable(),
-  hash: z.string().nullable(),
-});
+// export const ApiResponseSchema = z.object({
+//   id: z.string(),
+//   key: z.string(),
+//   version: z.number(),
+//   data: z.object({
+//     url: z.string().optional(),
+//     name: z.string().optional(),
+//     value: z.string().optional(),
+//     where: z.string().optional(),
+//   }),
+//   status: z.string(),
+//   createdAt: z.string(),
+//   prevHash: z.string().nullable(),
+//   hash: z.string().nullable(),
+// });
 
 export async function getApiKey() {
   // SecureStore 또는 .env에서 API KEY를 읽어옴

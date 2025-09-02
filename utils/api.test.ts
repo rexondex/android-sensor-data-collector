@@ -1,4 +1,4 @@
-import { ApiResponseSchema } from '../utils/api';
+import { ApiResponseSchema } from './apiSchema';
 
 describe('ApiResponseSchema', () => {
   it('should validate a correct response', () => {
