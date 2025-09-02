@@ -1,4 +1,5 @@
 import { Image } from 'expo-image';
+import { useEffect } from 'react';
 import { Platform, StyleSheet } from 'react-native';
 
 import { HelloWave } from '@/components/HelloWave';
@@ -6,8 +7,33 @@ import ParallaxScrollView from '@/components/ParallaxScrollView';
 import SensorDataPanel from '@/components/SensorDataPanel';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
+import { useSensorBuffer } from '@/hooks/useSensorBuffer';
+import { useAvailableSensors, useSensorData } from '@/hooks/useSensors';
 
 export default function HomeScreen() {
+  const available = useAvailableSensors();
+  const data = useSensorData(available, 5000);
+  const { addData, flush, bufferSize } = useSensorBuffer();
+
+  // 5초마다 센서 데이터 버퍼에 추가
+  useEffect(() => {
+    if (Object.keys(data).length > 0) {
+      addData(data);
+    }
+  }, [data, addData]);
+
+  // 30초마다 버퍼 flush (전송 로직 자리)
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const batched = flush();
+      if (batched.length > 0) {
+        // TODO: 전송 함수 호출
+        console.log('Batch to send:', batched);
+      }
+    }, 30000);
+    return () => clearInterval(timer);
+  }, [flush]);
+
   return (
     <ParallaxScrollView
       headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
@@ -54,6 +80,7 @@ export default function HomeScreen() {
       </ThemedView>
       <ThemedView style={styles.stepContainer}>
         <SensorDataPanel interval={5000} />
+        <ThemedText>버퍼 크기: {bufferSize}</ThemedText>
       </ThemedView>
     </ParallaxScrollView>
   );
