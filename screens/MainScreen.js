@@ -26,6 +26,7 @@ export default function MainScreen() {
     transmissionStatus,
     lastTransmission,
     error: apiError,
+    failCount,
   } = useApiTransmitter(buffer);
 
   const [snackbarVisible, setSnackbarVisible] = useState(false);
@@ -33,13 +34,24 @@ export default function MainScreen() {
 
   useEffect(() => {
     if (sensorError) {
-      setSnackbarMsg(sensorError);
+      if (sensorError.includes('권한')) {
+        setSnackbarMsg('센서 권한이 필요합니다. 설정에서 권한을 허용해주세요.');
+      } else {
+        setSnackbarMsg(sensorError);
+      }
       setSnackbarVisible(true);
     } else if (apiError) {
-      setSnackbarMsg(apiError);
+      if (apiError.includes('Network')) {
+        setSnackbarMsg('네트워크 오류: 인터넷 연결을 확인하세요.');
+      } else {
+        setSnackbarMsg(apiError);
+      }
+      setSnackbarVisible(true);
+    } else if (failCount >= 3) {
+      setSnackbarMsg('데이터 전송이 3회 이상 연속 실패했습니다. 네트워크 상태를 확인하세요.');
       setSnackbarVisible(true);
     }
-  }, [sensorError, apiError]);
+  }, [sensorError, apiError, failCount]);
 
   return (
     <View style={styles.container}>
