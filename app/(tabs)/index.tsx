@@ -1,6 +1,6 @@
 import { Image } from 'expo-image';
 import { useEffect } from 'react';
-import { Platform, StyleSheet } from 'react-native';
+import { Alert, Platform, StyleSheet } from 'react-native';
 
 import { HelloWave } from '@/components/HelloWave';
 import ParallaxScrollView from '@/components/ParallaxScrollView';
@@ -9,6 +9,8 @@ import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { useSensorBuffer } from '@/hooks/useSensorBuffer';
 import { useAvailableSensors, useSensorData } from '@/hooks/useSensors';
+import { postSensorBatch } from '@/utils/api';
+import { clearFailedQueue, loadFailedQueue, saveFailedBatch } from '@/utils/failedQueue';
 
 export default function HomeScreen() {
   const available = useAvailableSensors();
@@ -25,11 +27,30 @@ export default function HomeScreen() {
   // 30초마다 버퍼 flush (전송 로직 자리)
   useEffect(() => {
     const timer = setInterval(() => {
-      const batched = flush();
-      if (batched.length > 0) {
-        // TODO: 전송 함수 호출
-        console.log('Batch to send:', batched);
-      }
+      const send = async () => {
+        const batched = flush();
+        let failed: any[] = [];
+        if (batched.length > 0) {
+          const results = await postSensorBatch(batched);
+          failed = results.filter(r => !r.success).map(r => r.item);
+        }
+        // 이전 실패 큐도 재시도
+        const prevFailed = await loadFailedQueue();
+        if (prevFailed.length > 0) {
+          const retryResults = await postSensorBatch(prevFailed);
+          const stillFailed = retryResults.filter(r => !r.success).map(r => r.item);
+          if (stillFailed.length === 0) {
+            await clearFailedQueue();
+          } else {
+            await saveFailedBatch(stillFailed);
+          }
+        }
+        if (failed.length > 0) {
+          await saveFailedBatch(failed);
+          Alert.alert('데이터 전송 실패', '일부 데이터가 서버에 전송되지 않았습니다.');
+        }
+      };
+      send();
     }, 30000);
     return () => clearInterval(timer);
   }, [flush]);
