@@ -1,16 +1,23 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { z } from 'zod';
 
 const API_KEY_STORAGE = 'API_KEY';
-const API_ENDPOINT = 'https://your-api-endpoint.com/data'; // 실제 엔드포인트로 교체 필요
+const QUEUE_STORAGE = 'SEND_QUEUE';
+const API_ENDPOINT = 'https://data-anchor-api-173411279831.asia-northeast3.run.app/records';
 const TRANSMIT_INTERVAL = 30000; // 30초
 const MAX_RETRIES = 3;
 
 const ApiResponseSchema = z.object({
-  success: z.boolean(),
-  message: z.string(),
+  id: z.string(),
+  key: z.string(),
+  version: z.number(),
+  data: z.record(z.any()),
+  status: z.string(),
+  createdAt: z.string(),
+  prevHash: z.any().nullable(),
+  hash: z.any().nullable(),
 });
 
 export function useApiTransmitter(buffer) {
@@ -18,6 +25,8 @@ export function useApiTransmitter(buffer) {
   const [transmissionStatus, setTransmissionStatus] = useState('대기');
   const [lastTransmission, setLastTransmission] = useState(null);
   const [error, setError] = useState(null);
+  const [failCount, setFailCount] = useState(0);
+  const isTransmitting = useRef(false);
 
   useEffect(() => {
     AsyncStorage.getItem(API_KEY_STORAGE).then(stored => {
@@ -29,7 +38,10 @@ export function useApiTransmitter(buffer) {
     if (!apiKey) return;
     const interval = setInterval(() => {
       if (buffer && buffer.length > 0) {
-        transmitBuffer(buffer);
+        transmitAll(buffer);
+      } else {
+        // 큐만 남아있을 수도 있으니 큐만 전송 시도
+        transmitAll([]);
       }
     }, TRANSMIT_INTERVAL);
     return () => clearInterval(interval);
@@ -41,29 +53,75 @@ export function useApiTransmitter(buffer) {
     setApiKeyState(key);
   };
 
-  const transmitBuffer = async (data) => {
+  // 큐 불러오기
+  const getQueue = async () => {
+    const q = await AsyncStorage.getItem(QUEUE_STORAGE);
+    return q ? JSON.parse(q) : [];
+  };
+  // 큐 저장
+  const setQueue = async (q) => {
+    await AsyncStorage.setItem(QUEUE_STORAGE, JSON.stringify(q));
+  };
+
+  // 버퍼+큐 합쳐서 전송, 성공 시 모두 삭제, 실패 시 큐에 저장
+  const transmitAll = async (bufferData) => {
+    if (isTransmitting.current) return;
+    isTransmitting.current = true;
     setTransmissionStatus('전송 중');
     setError(null);
     let retries = 0;
-    while (retries < MAX_RETRIES) {
-      try {
-        const res = await axios.post(API_ENDPOINT, { data }, {
-          headers: { 'Authorization': `Bearer ${apiKey}` },
-          timeout: 10000,
-        });
-        const parsed = ApiResponseSchema.safeParse(res.data);
-        if (!parsed.success) throw new Error('API 응답 형식 오류');
-        setTransmissionStatus('성공');
-        setLastTransmission(Date.now());
-        break;
-      } catch (e) {
-        retries++;
-        if (retries >= MAX_RETRIES) {
-          setTransmissionStatus('실패');
-          setError('전송 실패: ' + e.message);
+    let queue = await getQueue();
+    const toSend = [...queue, ...bufferData];
+    if (toSend.length === 0) {
+      setTransmissionStatus('대기');
+      isTransmitting.current = false;
+      return;
+    }
+    try {
+      while (retries < MAX_RETRIES) {
+        try {
+          // API 명세에 맞는 구조로 전송
+          for (const item of toSend) {
+            const payload = {
+              key: item.type || 'sensor-data',
+              data: item.data || item,
+            };
+            const res = await axios.post(API_ENDPOINT, payload, {
+              headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': apiKey,
+              },
+              timeout: 10000,
+            });
+            const parsed = ApiResponseSchema.safeParse(res.data);
+            if (!parsed.success) throw new Error('API 응답 형식 오류');
+          }
+          // 모두 성공 시 큐/버퍼 삭제
+          await setQueue([]);
+          setTransmissionStatus('성공');
+          setLastTransmission(Date.now());
+          setFailCount(0);
+          isTransmitting.current = false;
+          return;
+        } catch (e) {
+          retries++;
+          if (retries >= MAX_RETRIES) {
+            // 실패한 데이터 큐에 저장
+            await setQueue(toSend);
+            setTransmissionStatus('실패');
+            setError('전송 실패: ' + e.message);
+            setFailCount(failCount + 1);
+            isTransmitting.current = false;
+            return;
+          }
         }
       }
+    } catch (e) {
+      setTransmissionStatus('실패');
+      setError('전송 실패: ' + e.message);
+      setFailCount(failCount + 1);
     }
+    isTransmitting.current = false;
   };
 
   return {
@@ -72,5 +130,6 @@ export function useApiTransmitter(buffer) {
     transmissionStatus,
     lastTransmission,
     error,
+    failCount,
   };
 }
