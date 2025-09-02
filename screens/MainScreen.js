@@ -18,6 +18,7 @@ export default function MainScreen() {
     stopSensors,
     isCollecting,
     error: sensorError,
+    supportedSensors,
   } = useSensorManager();
   const {
     apiKey,
@@ -47,7 +48,7 @@ export default function MainScreen() {
       </Appbar.Header>
       <ScrollView>
         <ApiKeyPanel apiKey={apiKey} setApiKey={setApiKey} />
-        <SensorPanel sensorData={sensorData} isCollecting={isCollecting} startSensors={startSensors} stopSensors={stopSensors} />
+        <SensorPanel sensorData={sensorData} isCollecting={isCollecting} startSensors={startSensors} stopSensors={stopSensors} supportedSensors={supportedSensors} />
         <BufferStatusPanel bufferSize={bufferSize} />
         <TransmissionStatusPanel status={transmissionStatus} lastTransmission={lastTransmission} />
       </ScrollView>
